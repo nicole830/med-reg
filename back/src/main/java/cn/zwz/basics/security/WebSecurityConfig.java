@@ -102,8 +102,14 @@ public class WebSecurityConfig extends WebSecurityConfigurerAdapter {
                 // 配置JWT
                 .sessionManagement().sessionCreationPolicy(SessionCreationPolicy.STATELESS)
                 .and()
-                // 系统菜单权限拦截
-                .exceptionHandling().accessDeniedHandler(zwzAccessDeniedHandler)
+                // 系统菜单权限拦截：未认证时直接返回 JSON 401，避免 302 跳转登录页
+                .exceptionHandling()
+                .authenticationEntryPoint((request, response, exception) -> {
+                    response.setContentType("application/json;charset=UTF-8");
+                    response.setStatus(401);
+                    response.getWriter().write("{\"success\":false,\"code\":401,\"message\":\"登陆失效\",\"result\":null}");
+                })
+                .accessDeniedHandler(zwzAccessDeniedHandler)
                 .and()
                 // 验证码过滤
                 .addFilterBefore(imageValidateFilter, UsernamePasswordAuthenticationFilter.class)
