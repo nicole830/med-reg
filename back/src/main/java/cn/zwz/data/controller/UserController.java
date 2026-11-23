@@ -114,6 +114,12 @@ public class UserController {
         QueryWrapper<Role> roleQw = new QueryWrapper<>();
         roleQw.eq("default_role",true);
         List<Role> roleList = iRoleService.list(roleQw);
+        // 默认角色配置缺失时兜底绑定 ROLE_USER，避免新注册用户没有菜单
+        if(roleList.isEmpty()) {
+            QueryWrapper<Role> fallbackQw = new QueryWrapper<>();
+            fallbackQw.eq("name", "ROLE_USER");
+            roleList = iRoleService.list(fallbackQw);
+        }
         if(roleList.size() > 0){
             for(Role role : roleList) {
                 iUserRoleService.saveOrUpdate(new UserRole().setUserId(u.getId()).setRoleId(role.getId()));
@@ -127,7 +133,9 @@ public class UserController {
     @ApiOperation(value = "解锁验证密码")
     public Result<Object> unLock(@RequestParam String password){
         User u = securityUtil.getCurrUser();
-        if(!new BCryptPasswordEncoder().matches(password, u.getPassword())){
+        // 权限缓存里不保存密码，校验密码时按 id 实时查库
+        User dbUser = iUserService.getById(u.getId());
+        if(dbUser == null || !new BCryptPasswordEncoder().matches(password, dbUser.getPassword())){
             return ResultUtil.error("密码不正确");
         }
         return ResultUtil.data(null);
@@ -145,6 +153,7 @@ public class UserController {
             userForReset.setPassword(new BCryptPasswordEncoder().encode("123456"));
             iUserService.saveOrUpdate(userForReset);
             redisTemplate.delete(REDIS_PRE_4 + userForReset.getUsername());
+            securityUtil.evictUserCache(userForReset.getUsername());
         }
         return ResultUtil.success();
     }
@@ -155,9 +164,14 @@ public class UserController {
     @CacheEvict(key = "#u.username")
     public Result<Object> editOwn(User u){
         User old = securityUtil.getCurrUser();
+        // 只能改自己的资料：ID 强制取自当前登录用户，避免传别人的 id 越权修改
+        u.setId(old.getId());
         u.setUsername(old.getUsername());
         u.setPassword(old.getPassword());
+        u.setType(old.getType());
+        u.setStatus(old.getStatus());
         iUserService.saveOrUpdate(u);
+        securityUtil.evictUserCache(old.getUsername());
         return ResultUtil.success("修改成功");
     }
 
@@ -166,14 +180,17 @@ public class UserController {
     @ApiOperation(value = "修改密码")
     public Result<Object> modifyPass(@RequestParam String password,@RequestParam String newPass,@RequestParam String passStrength){
         User user = securityUtil.getCurrUser();
-        if(!new BCryptPasswordEncoder().matches(password, user.getPassword())){
+        // 权限缓存里不保存密码，校验原密码时按 id 实时查库
+        User dbUser = iUserService.getById(user.getId());
+        if(dbUser == null || !new BCryptPasswordEncoder().matches(password, dbUser.getPassword())){
             return ResultUtil.error("原密码不正确");
         }
         String newEncryptPass= new BCryptPasswordEncoder().encode(newPass);
-        user.setPassword(newEncryptPass);
-        user.setPassStrength(passStrength);
-        iUserService.saveOrUpdate(user);
-        redisTemplate.delete(REDIS_PRE_4 + user.getUsername());
+        dbUser.setPassword(newEncryptPass);
+        dbUser.setPassStrength(passStrength);
+        iUserService.saveOrUpdate(dbUser);
+        redisTemplate.delete(REDIS_PRE_4 + dbUser.getUsername());
+        securityUtil.evictUserCache(dbUser.getUsername());
         return ResultUtil.success();
     }
 
@@ -201,6 +218,12 @@ public class UserController {
             u.setPassword(null);
         }
         return new ResultUtil<IPage<User>>().setData(userData);
+    }
+
+    @RequestMapping(value = "/getByCondition", method = RequestMethod.GET)
+    @ApiOperation(value = "查询用户（兼容前端选人组件）")
+    public Result<IPage<User>> getByCondition(@ModelAttribute User user, @ModelAttribute PageVo page) {
+        return getUserList(user, page);
     }
 
     @SystemLog(about = "根据部门查询用户", type = LogType.DATA_CENTER,doType = "USER-08")
@@ -287,6 +310,7 @@ public class UserController {
         redisTemplate.delete(REDIS_PRE_1 + u.getId());
         redisTemplate.delete(REDIS_PRE_2 + u.getId());
         redisTemplate.delete(REDIS_PRE_3 + u.getId());
+        securityUtil.evictUserCache(customaryUser.getUsername());
         return ResultUtil.success();
     }
 
@@ -332,6 +356,7 @@ public class UserController {
         user.setStatus(CommonConstant.USER_STATUS_LOCK);
         iUserService.saveOrUpdate(user);
         redisTemplate.delete("user::"+user.getUsername());
+        securityUtil.evictUserCache(user.getUsername());
         return ResultUtil.success();
     }
 
@@ -346,6 +371,7 @@ public class UserController {
         user.setStatus(CommonConstant.USER_STATUS_NORMAL);
         iUserService.saveOrUpdate(user);
         redisTemplate.delete("user::"+user.getUsername());
+        securityUtil.evictUserCache(user.getUsername());
         return ResultUtil.success();
     }
 
@@ -359,6 +385,7 @@ public class UserController {
             redisTemplate.delete("userRole::" + u.getId());
             redisTemplate.delete("userRole::depIds:" + u.getId());
             redisTemplate.delete("permission::userMenuList:" + u.getId());
+            securityUtil.evictUserCache(u.getUsername());
             Set<String> keys = redisTemplateHelper.keys("department::*");
             redisTemplate.delete(keys);
             iUserService.removeById(id);

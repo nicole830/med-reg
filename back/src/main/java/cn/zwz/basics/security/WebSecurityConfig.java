@@ -7,9 +7,7 @@ import cn.zwz.basics.parameter.ZwzLoginProperties;
 import cn.zwz.basics.security.jwt.AuthenticationFailHandler;
 import cn.zwz.basics.security.jwt.AuthenticationSuccessHandler;
 import cn.zwz.basics.security.jwt.ZwzAccessDeniedHandler;
-import cn.zwz.basics.security.permission.MyFilterSecurityInterceptor;
-import cn.zwz.basics.security.validate.ImageValidateFilter;
-import io.swagger.annotations.ApiOperation;
+import cn.zwz.basics.security.validate.ImageValidateFilter;import io.swagger.annotations.ApiOperation;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -20,7 +18,6 @@ import org.springframework.security.config.annotation.web.configuration.WebSecur
 import org.springframework.security.config.annotation.web.configurers.ExpressionUrlAuthorizationConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
-import org.springframework.security.web.access.intercept.FilterSecurityInterceptor;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
 /**
@@ -30,6 +27,56 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 @Configuration
 @EnableGlobalMethodSecurity(prePostEnabled=true)
 public class WebSecurityConfig extends WebSecurityConfigurerAdapter {
+
+    /**
+     * 管理端写接口白名单式保护：只允许 ROLE_ADMIN
+     * 说明：原来依赖 a_permission 的 URL 权限表，但表里没有 URL 规则，等于全部放行
+     */
+    private static final String[] ADMIN_ONLY_URLS = {
+            "/zwz/role/**",
+            "/zwz/myUser/**",
+            "/zwz/log/**",
+            "/zwz/redis/**",
+            "/zwz/code/**",
+            "/zwz/dict/**",
+            "/zwz/setting/**",
+            "/zwz/upload/**",
+            "/zwz/file/getByCondition",
+            "/zwz/file/copy",
+            "/zwz/file/rename",
+            "/zwz/file/delete",
+            "/zwz/department/add",
+            "/zwz/department/edit",
+            "/zwz/department/delByIds",
+            "/zwz/user/getUserList",
+            "/zwz/user/getByCondition",
+            "/zwz/user/getAll",
+            "/zwz/user/getByDepartmentId/**",
+            "/zwz/user/delByIds",
+            "/zwz/permission/getAllList",
+            "/zwz/permission/add",
+            "/zwz/permission/edit",
+            "/zwz/permission/delByIds",
+            "/zwz/permission/search",
+            "/zwz/permission/getUserByPermission",
+            "/zwz/hospitalOrder/getAll",
+            "/zwz/hospitalOrder/getByPage",
+            "/zwz/hospitalOrder/insertOrUpdate",
+            "/zwz/hospitalOrder/delByIds",
+            "/zwz/paymentRecord/getByPage",
+            "/zwz/doctor/insertOrUpdate",
+            "/zwz/doctor/delByIds",
+            "/zwz/doctorScheduling/addNumber",
+            "/zwz/doctorScheduling/insertOrUpdate",
+            "/zwz/doctorScheduling/delByIds",
+            "/zwz/hospitalNews/insertOrUpdate",
+            "/zwz/hospitalNews/delByIds",
+            "/zwz/hospitalNews/set_top_by_id",
+            "/zwz/hospitalNews/set_public_by_id",
+            "/zwz/hospitalSubject/insertOrUpdate",
+            "/zwz/hospitalSubject/delByIds",
+            "/zwz/messageBoard/delByIds"
+    };
 
     @Autowired
     private ZwzLoginProperties zwzLoginProperties;
@@ -48,9 +95,6 @@ public class WebSecurityConfig extends WebSecurityConfigurerAdapter {
 
     @Autowired
     private ZwzAccessDeniedHandler zwzAccessDeniedHandler;
-
-    @Autowired
-    private MyFilterSecurityInterceptor myFilterSecurityInterceptor;
 
     @Autowired
     private ImageValidateFilter imageValidateFilter;
@@ -73,6 +117,8 @@ public class WebSecurityConfig extends WebSecurityConfigurerAdapter {
         for(String authenticationUrl : noAuthenticationProperties.getAuthentication()){
             expressionInterceptUrlRegistry.antMatchers(authenticationUrl).permitAll();
         }
+        // 管理端写接口统一要求管理员角色
+        expressionInterceptUrlRegistry.antMatchers(ADMIN_ONLY_URLS).hasAuthority("ROLE_ADMIN");
         expressionInterceptUrlRegistry.and().formLogin()
                 // 默认提示登陆的接口
                 .loginPage("/zwz/common/needLogin")
@@ -113,8 +159,6 @@ public class WebSecurityConfig extends WebSecurityConfigurerAdapter {
                 .and()
                 // 验证码过滤
                 .addFilterBefore(imageValidateFilter, UsernamePasswordAuthenticationFilter.class)
-                // 备用过滤器
-                .addFilterBefore(myFilterSecurityInterceptor, FilterSecurityInterceptor.class)
                 // JWT认证过滤
                 .addFilter(new JwtRoleFilter(authenticationManager(), zwzLoginProperties, stringRedisTemplate, securityUtil));
     }

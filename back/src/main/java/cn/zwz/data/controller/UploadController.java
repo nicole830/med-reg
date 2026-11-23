@@ -45,6 +45,9 @@ public class UploadController {
         if(StrUtil.isNotBlank(base64)){
             file = Base64DecodeMultipartFile.base64Convert(base64);
         }
+        if(file == null || file.isEmpty()) {
+            return ResultUtil.error("请选择要上传的文件");
+        }
         String result = null;
         String fKey = CommonUtil.renamePic(file.getOriginalFilename());
         File f = new File();
@@ -61,15 +64,18 @@ public class UploadController {
         } catch (Exception e) {
             return ResultUtil.error(e.toString());
         }
-        OssSettingVo vo = getOssSetting();
-        return ResultUtil.data(vo.getFileHttp() + vo.getFileView() + "/" + f.getId());
+        if(getOssSetting() == null) {
+            return ResultUtil.error("文件服务未配置，请联系管理员");
+        }
+        // 返回相对地址，前台走 /zwz 代理，不再绑定 8080 这类具体端口
+        return ResultUtil.data("/zwz/file/view/" + f.getId());
     }
 
     public OssSettingVo getOssSetting() {
         Setting s1 = iSettingService.getById("FILE_VIEW");
         Setting s2 = iSettingService.getById("FILE_HTTP");
         Setting s3 = iSettingService.getById("FILE_PATH");
-        if(s1 == null || s1 == null || s1 == null) {
+        if(s1 == null || s2 == null || s3 == null) {
             return null;
         }
         return new OssSettingVo(s1.getValue(),s2.getValue(),s3.getValue());

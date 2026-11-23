@@ -78,13 +78,12 @@ public class FileController {
         }
         IPage<File> fileList = iFileService.page(PageUtil.initMpPage(page),qw);
 
-        OssSettingVo os = getOssSetting();
         Map<String, String> map = new HashMap<>(16);
         for(File e : fileList.getRecords()) {
             if (e.getLocation() != null && Objects.equals(0,e.getLocation())) {
-                String url = os.getFileHttp() + os.getFileView() + "/";
                 entityManager.detach(e);
-                e.setUrl(url + e.getId());
+                // 相对地址，避免端口漂移后图片打不开
+                e.setUrl("/zwz/file/view/" + e.getId());
             }
             if (StrUtil.isNotBlank(e.getCreateBy())) {
                 if (!map.containsKey(e.getCreateBy())) {
@@ -94,7 +93,7 @@ public class FileController {
                     if (u != null) {
                         e.setNickname(u.getNickname());
                     }
-                    map.put(e.getCreateBy(), u.getNickname());
+                    map.put(e.getCreateBy(), u == null ? e.getCreateBy() : u.getNickname());
                 } else {
                     e.setNickname(map.get(e.getCreateBy()));
                 }
@@ -189,7 +188,7 @@ public class FileController {
         Setting s1 = iSettingService.getById("FILE_VIEW");
         Setting s2 = iSettingService.getById("FILE_HTTP");
         Setting s3 = iSettingService.getById("FILE_PATH");
-        if(s1 == null || s1 == null || s1 == null) {
+        if(s1 == null || s2 == null || s3 == null) {
             return null;
         }
         return new OssSettingVo(s1.getValue(),s2.getValue(),s3.getValue());

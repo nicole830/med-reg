@@ -5,6 +5,7 @@ import cn.zwz.basics.log.SystemLog;
 import cn.zwz.basics.redis.RedisTemplateHelper;
 import cn.zwz.basics.utils.PageUtil;
 import cn.zwz.basics.utils.ResultUtil;
+import cn.zwz.basics.utils.SecurityUtil;
 import cn.zwz.basics.baseVo.PageVo;
 import cn.zwz.basics.baseVo.Result;
 import cn.zwz.data.entity.*;
@@ -49,6 +50,9 @@ public class RoleController {
 
     @Autowired
     private RedisTemplateHelper redisTemplateHelper;
+
+    @Autowired
+    private SecurityUtil securityUtil;
 
     @SystemLog(about = "查询全部角色", type = LogType.DATA_CENTER,doType = "ROLE-01")
     @RequestMapping(value = "/getAllList", method = RequestMethod.GET)
@@ -141,6 +145,7 @@ public class RoleController {
         redisTemplate.delete(keysUserRole);
         Set<String> keysUserMenu = redisTemplateHelper.keys("permission::userMenuList:*");
         redisTemplate.delete(keysUserMenu);
+        securityUtil.evictAllUserCache();
         return ResultUtil.data();
     }
 
@@ -161,6 +166,7 @@ public class RoleController {
         redisTemplate.delete(keysUser);
         Set<String> keysUserRole = redisTemplateHelper.keys("userRole:" + "*");
         redisTemplate.delete(keysUserRole);
+        securityUtil.evictAllUserCache();
         return new ResultUtil<Role>().setData(role);
     }
 

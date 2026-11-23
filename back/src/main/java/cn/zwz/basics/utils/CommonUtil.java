@@ -20,7 +20,16 @@ public class CommonUtil {
 
     @ApiOperation(value = "生成随机文件名称")
     public static String renamePic(String fileName) {
-        return UUID.randomUUID().toString().replace("-", "") + fileName.substring(fileName.lastIndexOf("."));
+        String uuid = UUID.randomUUID().toString().replace("-", "");
+        if (fileName == null) {
+            return uuid;
+        }
+        int dotIndex = fileName.lastIndexOf(".");
+        // 没有扩展名时不能 substring(-1)，直接返回 uuid
+        if (dotIndex < 0 || dotIndex >= fileName.length() - 1) {
+            return uuid;
+        }
+        return uuid + fileName.substring(dotIndex);
     }
 
     @ApiOperation(value = "生成随机企微验证码")

@@ -1,5 +1,6 @@
 package cn.zwz.doctor.controller;
 
+import cn.hutool.core.date.DateUtil;
 import cn.zwz.basics.baseVo.PageVo;
 import cn.zwz.basics.baseVo.Result;
 import cn.zwz.basics.utils.PageUtil;
@@ -17,7 +18,9 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
 /**
  * @author 郑为中
@@ -41,20 +44,47 @@ public class DoctorSchedulingController {
         if(doctor == null) {
             return ResultUtil.error("医生不存在");
         }
-        if(number < 1) {
-            return ResultUtil.error("放号数必须大于0");
+        if(number < 1 || number > 200) {
+            return ResultUtil.error("单次放号数必须在 1-200 之间");
         }
-        for(int i = 1 ; i <= number; i ++) {
+        if(ZwzNullUtils.isNull(date) || !date.matches("\\d{4}-\\d{2}-\\d{2}")) {
+            return ResultUtil.error("日期格式应为 yyyy-MM-dd");
+        }
+        if(date.compareTo(DateUtil.today()) < 0) {
+            return ResultUtil.error("不能给历史日期放号");
+        }
+        if(step < 0 || step > 1) {
+            return ResultUtil.error("时段只能是 0（上午）或 1（下午）");
+        }
+        // 幂等：接着该医生/日期/时段已有最大号往后放，重复点击不会生成重复号
+        QueryWrapper<DoctorScheduling> maxQw = new QueryWrapper<>();
+        maxQw.select("COALESCE(MAX(CAST(number AS UNSIGNED)), 0) AS number");
+        maxQw.eq("doctor_id", doctorId);
+        maxQw.eq("date", date);
+        maxQw.eq("step", String.valueOf(step));
+        DoctorScheduling maxRow = iDoctorSchedulingService.getOne(maxQw);
+        int start = 1;
+        if(maxRow != null && !ZwzNullUtils.isNull(maxRow.getNumber())) {
+            try {
+                start = Integer.parseInt(maxRow.getNumber()) + 1;
+            } catch (NumberFormatException e) {
+                return ResultUtil.error("已有号源编号异常，无法继续放号");
+            }
+        }
+        List<DoctorScheduling> batch = new ArrayList<>();
+        for(int i = 0; i < number; i ++) {
             DoctorScheduling ds = new DoctorScheduling();
             ds.setDoctorId(doctor.getId());
             ds.setDoctorName(doctor.getDoctorName());
-            ds.setNumber(i + "");
+            ds.setNumber((start + i) + "");
             ds.setStep(step + "");
             ds.setDate(date);
             ds.setOrderFlag(0);
-            iDoctorSchedulingService.saveOrUpdate(ds);
+            batch.add(ds);
         }
-        return ResultUtil.success("放号成功");
+        // 批量插入，避免 for 循环一条一条写库
+        iDoctorSchedulingService.saveBatch(batch);
+        return ResultUtil.success("放号成功，本次号源 " + start + " - " + (start + number - 1));
     }
 
     @RequestMapping(value = "/getAll", method = RequestMethod.GET)
@@ -73,9 +103,9 @@ public class DoctorSchedulingController {
         if(!ZwzNullUtils.isNull(scheduling.getDate())) {
             qw.eq("date",scheduling.getDate());
         }
-        if(scheduling.getStep().equals("0")) {
+        if(Objects.equals("0", scheduling.getStep())) {
             qw.eq("step","0");
-        } else if(scheduling.getStep().equals("1")) {
+        } else if(Objects.equals("1", scheduling.getStep())) {
             qw.eq("step","1");
         }
         return new ResultUtil<IPage<DoctorScheduling>>().setData(iDoctorSchedulingService.page(PageUtil.initMpPage(page),qw));

@@ -7,6 +7,7 @@ import cn.zwz.data.vo.RoleDTO;
 import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableName;
 import com.fasterxml.jackson.annotation.JsonFormat;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import io.swagger.annotations.ApiModel;
 import io.swagger.annotations.ApiModelProperty;
 import lombok.Data;
@@ -52,6 +53,7 @@ public class User extends ZwzBaseEntity {
 
     @ApiModelProperty(value = "密码")
     @NotNull(message = "密码不能为空")
+    @JsonProperty(access = JsonProperty.Access.WRITE_ONLY)
     private String password;
 
     @ApiModelProperty(value = "密码强度")

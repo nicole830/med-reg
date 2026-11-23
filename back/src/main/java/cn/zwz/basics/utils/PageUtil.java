@@ -11,8 +11,12 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
+import java.util.regex.Pattern;
 
 /**
  * 封装的分页插件
@@ -20,7 +24,17 @@ import java.util.Objects;
  */
 public class PageUtil {
 
-    private final static String[] NO_CAN_USE_WORDS = {"drop","select","master","insert","truncate","declare","delete","sleep","update","alter"};
+    /**
+     * 排序字段白名单：只允许字母开头、字母/数字/下划线组成，最长 64 位
+     */
+    private static final Pattern SAFE_SORT_FIELD = Pattern.compile("^[A-Za-z][A-Za-z0-9_]{0,63}$");
+
+    /**
+     * 不允许作为排序字段的 SQL 关键字（整词匹配，避免 updateTime 这类字段被误杀）
+     */
+    private static final Set<String> NO_CAN_USE_WORDS = new HashSet<>(Arrays.asList(
+            "drop", "select", "master", "insert", "truncate", "declare", "delete", "sleep", "update", "alter",
+            "union", "where", "from", "order", "group", "having", "into", "table", "database", "and", "or", "like"));
 
     private static final String SORT_BY_ASC = "asc";
 
@@ -37,6 +51,7 @@ public class PageUtil {
         int pageSize = page.getPageSize();
         String sort = page.getSort();
         String order = page.getOrder();
+        SQLInject(sort);
         pageNumber = pageNumber < 1 ? 1 : pageNumber;
         pageSize = pageSize < 1 ? 1 : pageSize;
         pageSize = pageSize > 100 ? 100 : pageSize;
@@ -103,11 +118,14 @@ public class PageUtil {
         if (ZwzNullUtils.isNull(sqlStr)) {
             return;
         }
-        sqlStr = sqlStr.toLowerCase();
-        for(int i = 0; i < NO_CAN_USE_WORDS.length; i ++) {
-            if (sqlStr.contains(NO_CAN_USE_WORDS[i])) {
-                throw new ZwzException(sqlStr + " 单词不合法");
-            }
+        String field = sqlStr.trim();
+        // 白名单：只允许普通字段名，拦截分号、空格、括号、逗号等注入载荷
+        if (!SAFE_SORT_FIELD.matcher(field).matches()) {
+            throw new ZwzException(sqlStr + " 单词不合法");
+        }
+        // 关键字整词匹配，不再用 contains，避免 updateTime / createTime 被误伤
+        if (NO_CAN_USE_WORDS.contains(field.toLowerCase())) {
+            throw new ZwzException(sqlStr + " 单词不合法");
         }
     }
 

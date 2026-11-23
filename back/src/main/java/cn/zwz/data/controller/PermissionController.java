@@ -299,6 +299,7 @@ public class PermissionController {
         }
         mySecurityMetadataSource.loadResourceDefine();
         redisTemplate.delete("permission::allList");
+        securityUtil.evictAllUserCache();
         return ResultUtil.success();
     }
 
@@ -318,6 +319,7 @@ public class PermissionController {
         iPermissionService.saveOrUpdate(permission);
         mySecurityMetadataSource.loadResourceDefine();
         redisTemplate.delete("permission::allList");
+        securityUtil.evictAllUserCache();
         return new ResultUtil<Permission>().setData(permission);
     }
 
@@ -342,6 +344,7 @@ public class PermissionController {
         redisTemplate.delete(keysUser);
         Set<String> keysUserMenu = redisTemplateHelper.keys("permission::userMenuList:*");
         redisTemplate.delete(keysUserMenu);
+        securityUtil.evictAllUserCache();
         redisTemplate.delete("permission::allList");
         return new ResultUtil<Permission>().setData(permission);
     }

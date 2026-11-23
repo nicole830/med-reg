@@ -51,7 +51,7 @@ public class DoctorController {
             qw.eq("subject_id",doctor.getSubjectId());
         }
         if(!ZwzNullUtils.isNull(doctor.getNoeDate()) && Objects.equals(doctor.getNoeDate(),"是")) {
-            qw.inSql("id","SELECT id FROM t_doctor WHERE id IN(SELECT DISTINCT doctor_id FROM t_doctor_scheduling WHERE DATE = '" + DateUtil.today() + "')");
+            qw.inSql("id","SELECT DISTINCT doctor_id FROM a_doctor_scheduling WHERE date = '" + DateUtil.today() + "'");
         }
         return new ResultUtil<IPage<Doctor>>().setData(iDoctorService.page(PageUtil.initMpPage(page),qw));
     }

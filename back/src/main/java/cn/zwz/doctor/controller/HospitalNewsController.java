@@ -7,6 +7,7 @@ import cn.zwz.basics.utils.ResultUtil;
 import cn.zwz.data.utils.ZwzNullUtils;
 import cn.zwz.doctor.entity.HospitalNews;
 import cn.zwz.doctor.service.IHospitalNewsService;
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
@@ -36,13 +37,25 @@ public class HospitalNewsController {
 
     @RequestMapping(value = "/getByPage", method = RequestMethod.GET)
     @ApiOperation(value = "查询医院新闻")
-    public Result<IPage<HospitalNews>> getByPage(PageVo page){
-        return new ResultUtil<IPage<HospitalNews>>().setData(iHospitalNewsService.page(PageUtil.initMpPage(page)));
+    public Result<IPage<HospitalNews>> getByPage(PageVo page, @RequestParam(required = false) String publicOnly){
+        QueryWrapper<HospitalNews> qw = new QueryWrapper<>();
+        // 患者端可传 publicOnly=yes，只拿已公开新闻；后台不传则查全部
+        if("yes".equalsIgnoreCase(publicOnly)) {
+            qw.eq("is_public", "yes");
+        }
+        return new ResultUtil<IPage<HospitalNews>>().setData(iHospitalNewsService.page(PageUtil.initMpPage(page), qw));
     }
 
     @RequestMapping(value = "/insertOrUpdate", method = RequestMethod.POST)
     @ApiOperation(value = "增改医院新闻")
     public Result<HospitalNews> saveOrUpdate(HospitalNews hospitalNews){
+        // 新增时补齐默认值，避免 is_top / is_public 为 null 导致开关接口 NPE
+        if(ZwzNullUtils.isNull(hospitalNews.getIsTop())) {
+            hospitalNews.setIsTop("no");
+        }
+        if(ZwzNullUtils.isNull(hospitalNews.getIsPublic())) {
+            hospitalNews.setIsPublic("no");
+        }
         if(iHospitalNewsService.saveOrUpdate(hospitalNews)){
             return new ResultUtil<HospitalNews>().setData(hospitalNews);
         }
@@ -65,7 +78,7 @@ public class HospitalNewsController {
         if(appDynamicNew==null) {
             return ResultUtil.error("该动态信息不存在");
         }
-        if(appDynamicNew.getIsTop().equals("yes")) {
+        if(appDynamicNew.getIsTop() != null && appDynamicNew.getIsTop().equals("yes")) {
             appDynamicNew.setIsTop("no");
         }
         else {
@@ -84,7 +97,7 @@ public class HospitalNewsController {
         if(appDynamicNew==null) {
             return ResultUtil.error("该动态信息不存在");
         }
-        if(appDynamicNew.getIsPublic().equals("yes")) {
+        if(appDynamicNew.getIsPublic() != null && appDynamicNew.getIsPublic().equals("yes")) {
             appDynamicNew.setIsPublic("no");
         }
         else {

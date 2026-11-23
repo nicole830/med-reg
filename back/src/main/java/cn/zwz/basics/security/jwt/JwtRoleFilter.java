@@ -53,13 +53,15 @@ public class JwtRoleFilter extends BasicAuthenticationFilter {
         }
         TokenUser tokenUser = new Gson().fromJson(tokenInRedis, TokenUser.class);
         userName = tokenUser.getUsername();
-        List<GrantedAuthority> permissionList = new ArrayList<>();
-        if(zwzLoginProperties.getSaveRoleFlag()){
+        // 每次都从数据库重建 authorities（含角色），token 里的权限只作兜底：
+        // 登录时 principal 没有填充角色，直接用 token 会导致 hasRole 永远不成立
+        List<GrantedAuthority> permissionList = securityUtil.getCurrUserPerms(userName);
+        if(permissionList.isEmpty() && tokenUser.getPermissions() != null) {
             for(String permission : tokenUser.getPermissions()){
-                permissionList.add(new SimpleGrantedAuthority(permission));
+                if(!ZwzNullUtils.isNull(permission)) {
+                    permissionList.add(new SimpleGrantedAuthority(permission));
+                }
             }
-        } else{
-            permissionList = securityUtil.getCurrUserPerms(userName);
         }
         if(!tokenUser.getSaveLogin()){
             stringRedisTemplate.opsForValue().set(ZwzLoginProperties.USER_TOKEN_PRE + userName, header, zwzLoginProperties.getUserTokenInvalidDays(), TimeUnit.MINUTES);

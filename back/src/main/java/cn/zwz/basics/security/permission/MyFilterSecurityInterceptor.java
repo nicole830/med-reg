@@ -18,7 +18,6 @@ import java.io.IOException;
  * @author 郑为中
  */
 @Slf4j
-@Component
 public class MyFilterSecurityInterceptor extends AbstractSecurityInterceptor implements Filter {
 
     @Autowired
