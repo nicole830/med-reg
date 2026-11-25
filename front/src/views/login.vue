@@ -47,7 +47,7 @@
                                 <Row>
                                     <Button class="login-btn" type="primary" size="large" :loading="loading" @click="submitLogin" long>
                                         <span v-if="!loading" style="letter-spacing:20px; font-weight:bold">登陆</span>
-                                        <span v-else>正在登陆...请稍后}</span>
+                                        <span v-else>正在登陆...请稍后</span>
                                     </Button>
                                 </Row>
                             </TabPane>
@@ -111,7 +111,7 @@ export default {
                 username: [{
                     required: true,
                     message: "账号不能为空",
-                    trigger: "blur"
+                    trigger: "blur"//`trigger` 是**什么时候触发校验**，`blur` 是其中一种触发时机：**失去焦点的时候**。
                 }],
                 password: [{
                     required: true,

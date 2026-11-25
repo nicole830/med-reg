@@ -45,8 +45,8 @@ public class ResponseUtil {
 
     public static Map<String, Object> resultMap(boolean flag, Integer responseCode, String message, Object data){
         Map<String, Object> responseMap = new HashMap<String, Object>(16);
-        responseMap.put("result", data == null ? null : data);
-        responseMap.put("timestamp", System.currentTimeMillis() / 1000L);
+        responseMap.put("result", data);
+        responseMap.put("timestamp", System.currentTimeMillis() / 1000L);//拿到**毫秒时间戳**（从 1970-01-01 00:00:00 UTC 到现在一共多少毫秒）
         responseMap.put("success", flag);
         responseMap.put("code", responseCode);
         responseMap.put("message", message);

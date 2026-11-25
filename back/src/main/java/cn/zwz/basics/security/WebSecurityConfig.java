@@ -158,6 +158,8 @@ public class WebSecurityConfig extends WebSecurityConfigurerAdapter {
                 .accessDeniedHandler(zwzAccessDeniedHandler)
                 .and()
                 // 验证码过滤
+                //请把我写的 imageValidateFilter 放在 UsernamePasswordAuthenticationFilter 的前面执行。
+                //UsernamePasswordAuthenticationFilter 是 Spring Security 内置的一个非常核心的过滤器。它的主要职责是处理表单登录（即拦截默认的 /login 请求，提取用户输入的用户名和密码，并交给系统进行认证）。
                 .addFilterBefore(imageValidateFilter, UsernamePasswordAuthenticationFilter.class)
                 // JWT认证过滤
                 .addFilter(new JwtRoleFilter(authenticationManager(), zwzLoginProperties, stringRedisTemplate, securityUtil));
