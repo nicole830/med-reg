@@ -17,14 +17,14 @@ import java.util.concurrent.TimeUnit;
 /**
  * @author 郑为中
  */
-@Api(tags = "验证码接口")
+@Api(tags = "验证码接口")//Swagger 文档标签，在接口文档上归类
 @RequestMapping("/zwz/common/captcha")
 @RestController
 @Transactional
 public class CaptchaController {
 
     @Autowired
-    private StringRedisTemplate redisTemplate;
+    private StringRedisTemplate redisTemplate;//注入 Redis 模板，存验证码：`key=codeId，value=验证码字符串`
 
     @RequestMapping(value = "/draw/{captchaId}", method = RequestMethod.GET)
     @ApiOperation(value = "根据验证码ID获取图片")
@@ -38,7 +38,7 @@ public class CaptchaController {
     @RequestMapping(value = "/init", method = RequestMethod.GET)
     @ApiOperation(value = "初始化验证码")
     public Result<Object> init() {
-        String codeId = UUID.randomUUID().toString().replace("-","");
+        String codeId = UUID.randomUUID().toString().replace("-","");//无横杠的 UUID → `codeId`
         redisTemplate.opsForValue().set(codeId, new CreateVerifyCode().randomStr(4),2L, TimeUnit.MINUTES);
         return ResultUtil.data(codeId);
     }

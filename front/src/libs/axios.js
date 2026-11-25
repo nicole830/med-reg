@@ -1,9 +1,31 @@
 import axios from 'axios';
-import { getStore, setStore } from './storage';
+import { getStore, removeStore } from './storage';
 import { router } from '../router/index';
 import { Message } from 'view-design';
 import Cookies from 'js-cookie';
 let base = '/zwz';
+
+/**
+ * 对象转 application/x-www-form-urlencoded
+ * 原来 postRequest / putRequest / postNoAuthRequest 各复制了一份，抽出来统一维护
+ */
+const toUrlEncoded = (data) => {
+    if (!data) {
+        return '';
+    }
+    let ret = '';
+    for (let it in data) {
+        ret += encodeURIComponent(it) + '=' + encodeURIComponent(data[it]) + '&';
+    }
+    return ret.substring(0, ret.length - 1);
+};
+
+/**
+ * 统一错误提示，避免 message 为 null/undefined 时弹出空白提示
+ */
+const showErrorMessage = (message, fallback) => {
+    Message.error(message || fallback || '未知错误');
+};
 
 axios.defaults.timeout = 15000;
 axios.interceptors.request.use(config => {
@@ -16,35 +38,31 @@ axios.interceptors.request.use(config => {
 axios.interceptors.response.use(response => {
     const data = response.data;
 
+    // 文件流等非标准响应直接返回
+    if (!data || typeof data !== 'object') {
+        return data;
+    }
+
     switch (data.code) {
         case 401:
-            Cookies.set('userInfo', '');
-            setStore('accessToken', '');
+            // 清干净本地登录态：Cookie 存“已登录”标记，localStorage 存 Token 与用户信息
+            Cookies.remove('userInfo');
+            removeStore('accessToken');
+            removeStore('roles');
+            removeStore('userInfo');
             if (router.history.current.name != "login") {
-                if (data.message !== null) {
-                    Message.error(data.message);
-                } else {
-                    Message.error("未知错误，请重新登录");
-                }
+                showErrorMessage(data.message, "未知错误，请重新登录");
                 router.push('/login');
             }
             break;
         case 403:
-            if (data.message !== null) {
-                Message.error(data.message);
-            } else {
-                Message.error("未知错误");
-            }
+            showErrorMessage(data.message, "未知错误");
             break;
         case 500:
-            if (data.message !== null) {
-                Message.error(data.message);
-            } else {
-                Message.error("未知错误");
-            }
+            showErrorMessage(data.message, "未知错误");
             break;
         default:
-            return data;
+            break;
     }
 
     return data;
@@ -71,14 +89,7 @@ export const postRequest = (url, params) => {
         method: 'post',
         url: `${base}${url}`,
         data: params,
-        transformRequest: [function (data) {
-            let ret = '';
-            for (let it in data) {
-                ret += encodeURIComponent(it) + '=' + encodeURIComponent(data[it]) + '&';
-            }
-            ret = ret.substring(0, ret.length - 1);
-            return ret;
-        }],
+        transformRequest: [toUrlEncoded],
         headers: {
             'Content-Type': 'application/x-www-form-urlencoded',
             'accessToken': accessToken
@@ -92,14 +103,7 @@ export const putRequest = (url, params) => {
         method: 'put',
         url: `${base}${url}`,
         data: params,
-        transformRequest: [function (data) {
-            let ret = '';
-            for (let it in data) {
-                ret += encodeURIComponent(it) + '=' + encodeURIComponent(data[it]) + '&';
-            }
-            ret = ret.substring(0, ret.length - 1);
-            return ret;
-        }],
+        transformRequest: [toUrlEncoded],
         headers: {
             'Content-Type': 'application/x-www-form-urlencoded',
             'accessToken': accessToken
@@ -132,14 +136,7 @@ export const postNoAuthRequest = (url, params) => {
         method: 'post',
         url: `${base}${url}`,
         data: params,
-        transformRequest: [function (data) {
-            let ret = '';
-            for (let it in data) {
-                ret += encodeURIComponent(it) + '=' + encodeURIComponent(data[it]) + '&';
-            }
-            ret = ret.substring(0, ret.length - 1);
-            return ret;
-        }],
+        transformRequest: [toUrlEncoded],
         headers: {
             'Content-Type': 'application/x-www-form-urlencoded'
         }

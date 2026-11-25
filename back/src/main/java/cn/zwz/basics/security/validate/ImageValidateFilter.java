@@ -25,13 +25,13 @@ import java.util.Objects;
 public class ImageValidateFilter extends OncePerRequestFilter {
 
     @Autowired
-    private CaptchaProperties captchaProperties;
+    private CaptchaProperties captchaProperties;// 配置类，读取yml里需要校验验证码的接口地址列表
 
     @Autowired
     private StringRedisTemplate redisTemplate;
 
     @Autowired
-    private PathMatcher pathMatcher;
+    private PathMatcher pathMatcher;// 路径匹配器，支持ant风格路径，比如 /login/**
 
     private static final boolean RESPONSE_FAIL_FLAG = false;
 
