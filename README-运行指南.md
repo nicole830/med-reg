@@ -25,7 +25,7 @@ med-reg/
 | 后端 | Spring Boot 2.7.18 + MyBatis-Plus 3.5.2 | 端口 **8081**，接口前缀 `/zwz` |
 | 前端 | Vue 2.6.14 + View UI 4.7.0 | dev 端口 **8080**，被占用时自动顺延 |
 | 数据库 | MySQL 8.0（库名 `order`） | 默认 `127.0.0.1:3306` |
-| 缓存 | Redis（db 0） | 默认 `127.0.0.1:6379`，存验证码与登录 token |
+| 缓存 | Redis（db 1） | 默认 `127.0.0.1:6379`，存验证码与登录 token；2026-11-27 起改用 db1，与其它项目隔离 |
 
 ## 3. 环境要求
 
@@ -64,6 +64,8 @@ docker start redis
 
 Redis 没启动时，验证码接口会 500，登录必然失败。
 
+2026-11-27 起本项目使用 **db1**（与其它项目隔离），验证码与 token 的 key 形如 `ZWZ_*`，可用 `redis-cli -n 1 keys 'ZWZ_*'` 查看。
+
 ### 4.3 后端（8081）
 
 ```bash
@@ -72,12 +74,19 @@ mvn clean package -DskipTests
 java -jar target/order-register-1.0.0.jar
 ```
 
-数据库账号密码在 `back/src/main/resources/application.yml` 第 13-16 行。不改文件、临时覆盖时用启动参数：
+数据库账号密码在 `back/src/main/resources/application.yml` 第 13-16 行，已与本机一致（`root / 1234567890`），直接启动即可。换环境时用启动参数临时覆盖：
 
 ```bash
 java -jar target/order-register-1.0.0.jar \
   --spring.datasource.username=root \
   --spring.datasource.password=你的密码
+```
+
+Windows 下或需要固定 UTF-8 时，直接用仓库里的启动脚本（会先停 8081 再拉起，并用 `JAVA_TOOL_OPTIONS` 传编码参数）：
+
+```powershell
+cd back
+pwsh -File .\start-backend.ps1
 ```
 
 启动成功的标志：
@@ -125,8 +134,8 @@ App running at:
 
 ```bash
 docker start redis
-# 终端 1：后端
-cd back && java -jar target/order-register-1.0.0.jar
+# 终端 1：后端（Windows 推荐用脚本，避免编码参数被拆开）
+cd back && pwsh -File .\start-backend.ps1
 
 # 终端 2：前端
 cd front && npm run dev
@@ -165,7 +174,7 @@ npm install --legacy-peer-deps --maxsockets=4 --fetch-retries=6
 
 **③ 登录提示「图形验证码输入错误」**
 
-验证码有效期 60 秒，过期需点图片刷新；同时确认 Redis 正常。
+验证码有效期 2 分钟，过期需点图片刷新；同时确认 Redis 正常。同一 IP 每分钟最多取 20 次验证码，超限会提示“验证码请求过于频繁”（等 1 分钟即可）。
 
 **④ 后端启动报数据库连接失败**
 
@@ -177,11 +186,13 @@ npm install --legacy-peer-deps --maxsockets=4 --fetch-retries=6
 
 **⑥ 中文乱码**
 
-启动时加 `-Dfile.encoding=UTF-8`；Windows 下若参数被拆开，改用环境变量：
+不要在 `java -jar` 后面直接拼 `-Dfile.encoding=UTF-8`——Windows 下它会被 JDK 当成“主类”，报 `ClassNotFoundException: /encoding=UTF-8`。正确做法是用环境变量：
 
 ```powershell
 $env:JAVA_TOOL_OPTIONS="-Dfile.encoding=UTF-8"
 ```
+
+或者直接用 `back/start-backend.ps1`（脚本已处理好这一步）。
 
 ## 8. 本机已验证的运行记录
 
@@ -192,3 +203,16 @@ $env:JAVA_TOOL_OPTIONS="-Dfile.encoding=UTF-8"
 | 验证码接口 | `GET /zwz/common/captcha/init` 返回 200（Redis 读写正常） |
 | 前端启动 | `Compiled successfully in 11.4s`，页面 200，`/zwz` 代理转发到 8081 返回 200 |
 | 实际访问端口 | 后端 8081，前端 8082（8080 被其他 Java 进程占用） |
+
+## 9. 安全相关默认行为（2026-11 两轮修复后）
+
+| 项 | 现状 |
+| --- | --- |
+| 管理接口鉴权 | `/zwz/role/**`、`/zwz/myUser/**`、`/zwz/hospitalOrder/getAll` 等 43 条仅 `ROLE_ADMIN` 可访问；普通访问返回 **HTTP 200 + `code=403`**（框架统一出口，前端按 `code` 判断） |
+| 密码字段 | `User.password` 为只写字段，用户列表接口不再返回 BCrypt 哈希 |
+| 订单付款/取消 | 校验归属与状态，条件更新保证幂等，并写 `a_payment_record` 支付/退款流水 |
+| 并发占号 | 号源 `order_flag` 条件更新 + 唯一索引 `uk_doc_date_step_num`，同一号源只会被卖一次 |
+| 演示模块 | `/zwz/student`、`/zwz/teacher` 默认不注册；需要时启动加 `--zwz.demo.enabled=true` |
+| 限流 | 单 IP 与全局各 100 次/秒；验证码 `init` 另有 60 秒 20 次 IP 频控 |
+| 文件地址 | 上传返回相对路径 `/zwz/file/view/{id}`，`a_setting.FILE_VIEW` 为 `127.0.0.1:8082/zwz/file/view`（开发环境，生产换真实域名） |
+| 回归脚本 | `back/regression-test.ps1`，31 项断言覆盖 bug 报告全部编号 |

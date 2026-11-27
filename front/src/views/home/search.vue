@@ -16,7 +16,7 @@
                 </div>
             </div>
             <div slot="list" class="search-select">
-                <Select v-model="key" prefix="ios-search" transfer clearable filterable placeholder="艾是OA菜单查询" @on-change="changeMenu" ref="select">
+                <Select v-model="key" prefix="ios-search" transfer clearable filterable placeholder="请输入医生姓名或科室名称" @on-change="changeMenu" ref="select">
                     <Option v-for="(item, index) in list" :value="item" :key="index">{{ item.title }}</Option>
                 </Select>
             </div>

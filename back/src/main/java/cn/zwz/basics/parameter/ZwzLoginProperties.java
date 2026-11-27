@@ -32,7 +32,7 @@ public class ZwzLoginProperties {
     private Integer loginFailMaxThenLockTimes = 10;
 
     @ApiModelProperty(value = "全局限流")
-    private Boolean allLimiting = false;
+    private Boolean allLimiting = true;
 
     @ApiModelProperty(value = "全局限流个数")
     private Integer allLimitingSize = 100;
@@ -41,7 +41,7 @@ public class ZwzLoginProperties {
     private Long allLimitingTime = 1000L;
 
     @ApiModelProperty(value = "单IP限流")
-    private Boolean oneLimiting = false;
+    private Boolean oneLimiting = true;
 
     @ApiModelProperty(value = "单IP限流个数")
     private Integer oneLimitingSize = 100;

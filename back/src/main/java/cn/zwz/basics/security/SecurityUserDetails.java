@@ -82,8 +82,8 @@ public class SecurityUserDetails extends User implements UserDetails {
             this.setUsername(user.getUsername());
             this.setPassword(user.getPassword());
             this.setStatus(user.getStatus());
-            this.permissions  = user.getPermissions();
-            this.roles = user.getRoles();
+            this.permissions  = user.getPermissions();//用户拥有的菜单列表
+            this.roles = user.getRoles();//用户拥有的角色列表
         }
     }
 }
