@@ -18,12 +18,15 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 
 import java.util.List;
 
 /**
+ * 演示模块：默认关闭，需要时设置 zwz.demo.enabled=true 才会注册
  * @author 郑为中
  */
+@ConditionalOnProperty(name = "zwz.demo.enabled", havingValue = "true")
 @Slf4j
 @RestController
 @Api(tags = "学生管理接口")

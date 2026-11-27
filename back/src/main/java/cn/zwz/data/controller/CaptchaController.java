@@ -37,7 +37,16 @@ public class CaptchaController {
 
     @RequestMapping(value = "/init", method = RequestMethod.GET)
     @ApiOperation(value = "初始化验证码")
-    public Result<Object> init() {
+    public Result<Object> init(javax.servlet.http.HttpServletRequest request) {
+        // 同一 IP 每分钟最多取 20 次验证码，避免被无限刷新
+        String limitKey = "ZWZ_CAPTCHA_INIT:" + request.getRemoteAddr();
+        Long times = redisTemplate.opsForValue().increment(limitKey);
+        if (times != null && times == 1L) {
+            redisTemplate.expire(limitKey, 60L, TimeUnit.SECONDS);
+        }
+        if (times != null && times > 20L) {
+            return ResultUtil.error("验证码请求过于频繁，请 1 分钟后再试");
+        }
         String codeId = UUID.randomUUID().toString().replace("-","");//无横杠的 UUID → `codeId`
         redisTemplate.opsForValue().set(codeId, new CreateVerifyCode().randomStr(4),2L, TimeUnit.MINUTES);
         return ResultUtil.data(codeId);

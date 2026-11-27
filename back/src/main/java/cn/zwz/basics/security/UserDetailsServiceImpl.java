@@ -35,14 +35,32 @@ public class UserDetailsServiceImpl implements UserDetailsService {
     public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
         String loginFailFlag = LOGIN_FAIL_DISABLED_PRE + username;
         String value = redisTemplate.opsForValue().get(loginFailFlag);
-        Long timeRest = redisTemplate.getExpire(loginFailFlag, TimeUnit.MINUTES);
-        if(!ZwzNullUtils.isNull(value)){
-            throw new ZwzException("试错超限，请您在" + timeRest + "分钟后再登");
+        if (!ZwzNullUtils.isNull(value)) {
+            Long timeRest = redisTemplate.getExpire(loginFailFlag, TimeUnit.MINUTES);
+            String tipMsg;
+            if (timeRest > 0) {
+                tipMsg = "试错超限，请您在" + timeRest + "分钟后再登录";
+            } else if (timeRest == -1) {
+                tipMsg = "账号已被永久锁定，请联系管理员";
+            } else {
+                // timeRest == -2 理论上走不到这里，因为value不为null
+                tipMsg = "账号锁定异常";
+            }
+            throw new ZwzException(tipMsg);
         }
+
+        // account：支持用户名 / 手机号登录
+        String account = username;
         QueryWrapper<User> userQw = new QueryWrapper<>();
-        userQw.and(wrapper -> wrapper.eq("username", username).or().eq("mobile",username));
+        userQw.and(w -> w.eq("username", account).or().eq("mobile", account));
         userQw.orderByDesc("create_time");
-        userQw.last("limit 1");
-        return new SecurityUserDetails(iUserService.getOne(userQw));
+        // getOne第二个参数false：多条时不抛异常，返回第一条
+        User user = iUserService.getOne(userQw, false);
+        if (user == null) {
+            // 这里可以抛出账号不存在异常，和你上面登录失败锁定逻辑配合
+            throw new ZwzException("账号不存在");
+        }
+        return new SecurityUserDetails(user);
+
     }
 }
