@@ -52,7 +52,7 @@
             <Page :current="searchForm.pageNumber" :total="total" :page-size="searchForm.pageSize" @on-change="changePage" @on-page-size-change="changePageSize" :page-size-opts="[15,20,50]" size="small" show-total show-elevator show-sizer></Page>
         </Row>
     </Card>
-    <Modal v-model="orderModal" width="750" title="医生放号" ok-text="确认放号" @on-ok="addNumberFxFx">
+    <Modal v-model="orderModal" width="750" title="医生放号" ok-text="确认放号" :loading="addNumberSubmitting" @on-ok="addNumberFxFx">
         <Form :label-width="100" label-position="left">
             <Row>
                 <FormItem label="医生姓名">
@@ -74,7 +74,7 @@
             </Row>
             <Row>
                 <FormItem label="放号个数">
-                    <InputNumber :max="100" :min="1" v-model="zwzOrderNumber" placeholder="请输入放号个数" style="width:570px"></InputNumber>
+                    <InputNumber :max="200" :min="1" v-model="zwzOrderNumber" placeholder="请输入放号个数" style="width:570px"></InputNumber>
                 </FormItem>
             </Row>
         </Form>
@@ -126,6 +126,7 @@ export default {
             orderData: [],
             orderFindModal: false,
             orderModal: false,
+            addNumberSubmitting: false, // 放号提交中，防止连点重复放号
             tableHeight: 0,
             selected: [
                 "选择",
@@ -455,6 +456,10 @@ export default {
             })
         },
         addNumberFxFx() {
+            if (this.addNumberSubmitting) {
+                return; // 连点直接丢弃，避免一次操作放两批号
+            }
+            this.addNumberSubmitting = true;
             var that = this;
             addNumber({
                 doctorId: that.zwzSelecrDoctor.id,
@@ -462,9 +467,13 @@ export default {
                 step: that.zwzOrderStep,
                 number: that.zwzOrderNumber
             }).then(res => {
+                that.addNumberSubmitting = false;
                 if (res.success) {
-                    this.$Message.success("放号成功");
+                    this.$Message.success(res.message || "放号成功");
+                    that.orderModal = false;
                 }
+            }).catch(() => {
+                that.addNumberSubmitting = false;
             })
         },
         addNumberFx(e) {
