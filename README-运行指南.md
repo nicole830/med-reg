@@ -52,6 +52,14 @@ mysql -uroot -p --default-character-set=utf8mb4 < order220912.sql
 
 > ⚠️ `order220912.sql` 前几行是 `DROP DATABASE IF EXISTS order`，执行前先备份现有数据，已有数据时不要重复导入。
 
+导入（或已有库升级）后必须执行一次约束补建脚本：
+
+```bash
+mysql -uroot -p --default-character-set=utf8mb4 -D order < db/001_init_constraints.sql
+```
+
+脚本可重复执行，已存在的索引会自动跳过；结尾会打印自检结果，应能看到 `uk_doc_date_step_num`（放号防重）与 `uk_pay_order`（一单一流水）两行。缺了这两条唯一索引，并发放号会出现重号、同一挂号单能写入多条流水。
+
 ### 4.2 Redis
 
 ```bash
@@ -212,6 +220,7 @@ $env:JAVA_TOOL_OPTIONS="-Dfile.encoding=UTF-8"
 | 密码字段 | `User.password` 为只写字段，用户列表接口不再返回 BCrypt 哈希 |
 | 订单付款/取消 | 校验归属与状态，条件更新保证幂等，并写 `a_payment_record` 支付/退款流水 |
 | 并发占号 | 号源 `order_flag` 条件更新 + 唯一索引 `uk_doc_date_step_num`，同一号源只会被卖一次 |
+| 放号防连点 | 同一医生 + 日期 + 时段 5 秒内只接受一次放号（Redis `SET NX EX`，key 前缀 `ZWZ_ADD_NUMBER_DEDUPE:`）；Redis 不可用时降级，由唯一索引兜底 |
 | 演示模块 | `/zwz/student`、`/zwz/teacher` 默认不注册；需要时启动加 `--zwz.demo.enabled=true` |
 | 限流 | 单 IP 与全局各 100 次/秒；验证码 `init` 另有 60 秒 20 次 IP 频控 |
 | 文件地址 | 上传返回相对路径 `/zwz/file/view/{id}`，`a_setting.FILE_VIEW` 为 `127.0.0.1:8082/zwz/file/view`（开发环境，生产换真实域名） |

@@ -9,6 +9,12 @@ $docName = '王海花'
 
 function SQL($q) { (& $mysql -uroot -p1234567890 -D order -e $q 2>$null) | Out-String }
 
+# Redis 容器名不固定（redis / redis-hospital 等），自动探测；也可用 ZWZ_REDIS_CONTAINER 指定
+$redisC = if ($env:ZWZ_REDIS_CONTAINER) { $env:ZWZ_REDIS_CONTAINER } else {
+    (& docker ps --format '{{.Names}}' 2>$null | Where-Object { $_ -match 'redis' } | Select-Object -First 1)
+}
+if (-not $redisC) { Write-Output '警告：未找到 redis 容器，验证码相关用例会失败' }
+
 function Req($method, $path, $token, $body, $form) {
     $h = @{}
     if ($token) { $h['accessToken'] = $token }
@@ -21,7 +27,7 @@ function Req($method, $path, $token, $body, $form) {
 
 function Login($u, $p) {
     $ci = (((Req 'GET' '/zwz/common/captcha/init' $null).Body) | ConvertFrom-Json).result
-    $code = ((docker exec redis redis-cli -n 1 GET $ci) -join '').Trim().Trim('"')
+    $code = ((docker exec $redisC redis-cli -n 1 GET $ci) -join '').Trim().Trim('"')
     $r = Req 'POST' '/zwz/login' $null "username=$u&password=$p&captchaId=$ci&code=$code&saveLogin=true"
     $j = $null
     try { $j = $r.Body | ConvertFrom-Json } catch {}
@@ -108,12 +114,17 @@ $r = Req 'POST' '/zwz/hospitalOrder/addOrder' $tu 'orderId=T-SLOT-803'
 $j = $r.Body | ConvertFrom-Json
 Check 'P1-2' '2020年号源不能预约' ($j.success -eq $false -and $j.message -like '*过期*') "msg=$($j.message)"
 
-# ---------- P1-3 重复放号 ----------
-$r1 = Req 'POST' '/zwz/doctorScheduling/addNumber' $ta "doctorId=$docId&date=$D2&step=0&number=2"
-$r2 = Req 'POST' '/zwz/doctorScheduling/addNumber' $ta "doctorId=$docId&date=$D2&step=0&number=2"
-$nums = (SQL "SELECT GROUP_CONCAT(number) FROM a_doctor_scheduling WHERE doctor_id='$docId' AND date='$D2' AND step='0';").Split("`n")[1].Trim()
+# ---------- P1-3 重复放号 / 连点幂等 ----------
+$addBody = "doctorId=$docId&date=$D2&step=0&number=2"
+$r1 = Req 'POST' '/zwz/doctorScheduling/addNumber' $ta $addBody
+$j1 = $null; try { $j1 = $r1.Body | ConvertFrom-Json } catch {}
+$r2 = Req 'POST' '/zwz/doctorScheduling/addNumber' $ta $addBody
+$j2 = $null; try { $j2 = $r2.Body | ConvertFrom-Json } catch {}
+$nums = (SQL "SELECT GROUP_CONCAT(number ORDER BY CAST(number AS UNSIGNED)) FROM a_doctor_scheduling WHERE doctor_id='$docId' AND date='$D2' AND step='0';").Split("`n")[1].Trim()
 $dup = (SQL "SELECT COUNT(*) FROM (SELECT number FROM a_doctor_scheduling WHERE doctor_id='$docId' AND date='$D2' AND step='0' GROUP BY number HAVING COUNT(*)>1) t;").Split("`n")[1].Trim()
-Check 'P1-3' '连续两次放号不产生重复编号' ($dup -eq '0') "numbers=$nums dupGroups=$dup"
+Check 'P1-3a' '首次放号成功' ($j1 -and $j1.success -eq $true) "msg=$(if($j1){$j1.message})"
+Check 'P1-3b' '连点第二次被拒(5秒窗口)' ($j2 -and $j2.success -eq $false) "msg=$(if($j2){$j2.message})"
+Check 'P1-3c' '只放一批号且编号不重复' ($dup -eq '0' -and $nums -eq '1,2') "numbers=$nums dupGroups=$dup"
 
 # ---------- P1-4 今日筛选 ----------
 $r = Req 'GET' '/zwz/doctor/getByPage?pageNumber=1&pageSize=10&noeDate=%E6%98%AF' $ta
@@ -162,7 +173,7 @@ Check 'P2-4' '上传缺文件参数返回友好提示' ($j -and $j.success -eq $
 $regUser = 'zwz_reg_test'
 SQL "DELETE FROM a_user_role WHERE user_id IN (SELECT id FROM a_user WHERE username='$regUser'); DELETE FROM a_user WHERE username='$regUser';"
 $ci = ((Req 'GET' '/zwz/common/captcha/init' $null).Body | ConvertFrom-Json).result
-$code = ((docker exec redis redis-cli -n 1 GET $ci) -join '').Trim().Trim('"')
+$code = ((docker exec $redisC redis-cli -n 1 GET $ci) -join '').Trim().Trim('"')
 $r = Req 'POST' '/zwz/user/regist' $null "username=$regUser&nickname=%E5%9B%9E%E5%BD%92%E6%B5%8B%E8%AF%95&password=123456&captchaId=$ci&code=$code"
 $j = $null; try { $j = $r.Body | ConvertFrom-Json } catch {}
 $role = (SQL "SELECT r.name FROM a_user_role ur JOIN a_role r ON r.id=ur.role_id JOIN a_user u ON u.id=ur.user_id WHERE u.username='$regUser';").Split("`n")[1].Trim()
@@ -194,7 +205,7 @@ $r = Req 'GET' '/zwz/student/getByPage?pageNumber=1&pageSize=5' $ta
 Check 'P3-3' '演示模块 /zwz/student 已下线' (($r.Status -eq 404) -or ($r.Body -match '"status"\s*:\s*404')) "status=$($r.Status)"
 
 # ---------- P3-6 Redis 独立库 ----------
-$db1 = ((docker exec redis redis-cli -n 1 KEYS 'ZWZ_*') -join ',').Trim()
+$db1 = ((docker exec $redisC redis-cli -n 1 KEYS 'ZWZ_*') -join ',').Trim()
 Check 'P3-6' 'Redis 已切到独立 db1，ZWZ_ key 写入成功' ($db1 -ne '') "db1Keys=$(($db1 -split ',').Count)"
 
 # ---------- P3-7 验证码频控 ----------
@@ -203,8 +214,8 @@ for ($i = 1; $i -le 25; $i++) {
     $rr = Req 'GET' '/zwz/common/captcha/init' $null
     if ($rr.Body -match '频繁') { $hits++ }
 }
-docker exec redis redis-cli -n 1 DEL "ZWZ_CAPTCHA_INIT:127.0.0.1" | Out-Null
-docker exec redis redis-cli -n 1 DEL "ZWZ_CAPTCHA_INIT:0:0:0:0:0:0:0:1" | Out-Null
+docker exec $redisC redis-cli -n 1 DEL "ZWZ_CAPTCHA_INIT:127.0.0.1" | Out-Null
+docker exec $redisC redis-cli -n 1 DEL "ZWZ_CAPTCHA_INIT:0:0:0:0:0:0:0:1" | Out-Null
 Check 'P3-7' '同一IP高频刷验证码被限流' ($hits -gt 0) "blockedTimes=$hits"
 
 # ---------- 清理测试数据 ----------
