@@ -176,7 +176,8 @@ CREATE TABLE IF NOT EXISTS `a_doctor_scheduling` (
   `number` varchar(255) COLLATE utf8_croatian_ci DEFAULT NULL,
   `order_flag` int NOT NULL,
   `step` varchar(255) COLLATE utf8_croatian_ci DEFAULT NULL,
-  PRIMARY KEY (`id`)
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_doc_date_step_num` (`doctor_id`,`date`,`step`,`number`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3 COLLATE=utf8_croatian_ci;
 
 DELETE FROM `a_doctor_scheduling`;
